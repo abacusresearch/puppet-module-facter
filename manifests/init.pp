@@ -49,6 +49,32 @@
 # @param facts_file_mode
 #   The mode of the facts_file.
 #
+# @param facter_conf_dir
+#   The facter configuration directory
+#
+# @param facter_conf_dir_owner
+#   The facter configuration directory owner
+#
+# @param facter_conf_dir_group
+#   The facter configuration directory group owner
+#
+# @param facter_conf_dir_mode
+#   The facter configuration directory mode
+#
+# @param facter_conf_name
+#   The facter configuration file name
+#
+# @param facter_conf_owner
+#   The facter configuration file name owner
+#
+# @param facter_conf_group
+#   The facter configuration file name group owner
+#
+# @param facter_conf_mode
+#   The facter configuration file name mode
+#
+# @param facter_conf
+#   Hash of facter configurations
 #
 class facter (
   Boolean $manage_facts_d_dir = true,
@@ -56,7 +82,7 @@ class facter (
   Stdlib::Absolutepath $facts_d_dir = '/etc/facter/facts.d',
   String[1] $facts_d_owner = 'root',
   String[1] $facts_d_group = 'root',
-  Optional[Stdlib::Filemode] $facts_d_mode = '0755',
+  Stdlib::Filemode $facts_d_mode = '0755',
   Stdlib::Absolutepath $path_to_facter = '/opt/puppetlabs/bin/facter',
   Stdlib::Absolutepath $path_to_facter_symlink = '/usr/local/bin/facter',
   Boolean $ensure_facter_symlink = false,
@@ -65,16 +91,31 @@ class facter (
   Pattern[/\.txt*\Z/] $facts_file = 'facts.txt',
   String[1] $facts_file_owner = 'root',
   String[1] $facts_file_group = 'root',
-  Optional[Stdlib::Filemode] $facts_file_mode = '0644',
+  Stdlib::Filemode $facts_file_mode = '0644',
+  Stdlib::Absolutepath $facter_conf_dir = '/etc/puppetlabs/facter',
+  String[1] $facter_conf_dir_owner = 'root',
+  String[1] $facter_conf_dir_group = 'root',
+  Stdlib::Filemode $facter_conf_dir_mode = '0755',
+  String[1] $facter_conf_name = 'facter.conf',
+  String[1] $facter_conf_owner = 'root',
+  String[1] $facter_conf_group = 'root',
+  Stdlib::Filemode $facter_conf_mode = '0644',
+  Facter::Conf $facter_conf = {},
 ) {
   if $facts['os']['family'] == 'windows' {
     $facts_file_path  = "${facts_d_dir}\\${facts_file}"
     $facts_d_mode_real = undef
-    $facts_file_mode_real = undef
+    # Have to allow mode to be set as undef to concat will
+    # default to '0644' which could cause issues
+    $facts_file_mode_real = $facts_file_mode
+    $facter_conf_dir_mode_real = undef
+    $facter_conf_mode_real = undef
   } else {
     $facts_file_path  = "${facts_d_dir}/${facts_file}"
     $facts_d_mode_real = $facts_d_mode
     $facts_file_mode_real = $facts_file_mode
+    $facter_conf_dir_mode_real = $facter_conf_dir_mode
+    $facter_conf_mode_real = $facter_conf_mode
   }
 
   if $manage_facts_d_dir == true {
@@ -143,6 +184,37 @@ class facter (
   $structured_data_facts_hash.each |$k, $v| {
     facter::structured_data_fact { $k:
       * => $v,
+    }
+  }
+
+  if $facts['os']['family'] == 'windows' {
+    exec { "mkdir_p-${facter_conf_dir}":
+      command => "cmd /c mkdir ${facter_conf_dir}",
+      creates => $facter_conf_dir,
+      path    => $facts['path'],
+    }
+  } else {
+    exec { "mkdir_p-${facter_conf_dir}":
+      command => "mkdir -p ${facter_conf_dir}",
+      creates => $facter_conf_dir,
+      path    => '/bin:/usr/bin',
+    }
+  }
+  file { $facter_conf_dir:
+    ensure  => 'directory',
+    owner   => $facter_conf_dir_owner,
+    group   => $facter_conf_dir_group,
+    mode    => $facter_conf_dir_mode_real,
+    require => Exec["mkdir_p-${facter_conf_dir}"],
+  }
+  if ! empty($facter_conf) {
+    $facter_conf_json = stdlib::to_json_pretty($facter_conf)
+    file { "${facter_conf_dir}/${facter_conf_name}":
+      ensure  => 'file',
+      owner   => $facter_conf_owner,
+      group   => $facter_conf_group,
+      mode    => $facter_conf_mode_real,
+      content => "# File managed by Puppet, do not edit\n${facter_conf_json}",
     }
   }
 }

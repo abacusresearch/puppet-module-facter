@@ -9,7 +9,7 @@ describe 'facter' do
       supported_os: [
         {
           'operatingsystem'        => 'RedHat',
-          'operatingsystemrelease' => ['7'],
+          'operatingsystemrelease' => ['9'],
         },
       ],
     }
@@ -60,6 +60,25 @@ describe 'facter' do
             'path'    => '/bin:/usr/bin',
           })
         }
+
+        it {
+          should contain_exec('mkdir_p-/etc/puppetlabs/facter').with({
+            'command' => 'mkdir -p /etc/puppetlabs/facter',
+            'creates' => '/etc/puppetlabs/facter',
+          })
+        }
+
+        it {
+          should contain_file('/etc/puppetlabs/facter').with({
+            'ensure'  => 'directory',
+            'owner'   => 'root',
+            'group'   => 'root',
+            'mode'    => '0755',
+            'require' => 'Exec[mkdir_p-/etc/puppetlabs/facter]',
+          })
+        }
+
+        it { should_not contain_file('/etc/puppetlabs/facter/facter.conf') }
       end
 
       describe 'with purge_facts_d' do
@@ -324,7 +343,10 @@ describe 'facter' do
               'fact' => {
                 'value' => 'value',
               },
-            }
+            },
+            :facter_conf => {
+              'global' => { 'external-dir' => ['/foo'] },
+            },
           }
         end
 
@@ -376,6 +398,24 @@ describe 'facter' do
             'content' => 'fact=value',
           })
         }
+
+        it {
+          should contain_file('/etc/puppetlabs/facter/facter.conf').with({
+            'ensure' => 'file',
+            'owner'  => 'root',
+            'group'  => 'root',
+            'mode'   => '0644',
+            'content' => '# File managed by Puppet, do not edit
+{
+  "global": {
+    "external-dir": [
+      "/foo"
+    ]
+  }
+}
+'
+          })
+        }
       end
 
       describe 'variable type and content validations' do
@@ -387,7 +427,7 @@ describe 'facter' do
         end
         let(:validation_params) do
           {
-            #:param => 'value',
+            # :param => 'value',
           }
         end
 
@@ -502,6 +542,24 @@ describe 'facter' do
         }
 
         it { should_not contain_file('facter_symlink') }
+
+        it {
+          should contain_exec('mkdir_p-C:\ProgramData\PuppetLabs\facter\etc').with({
+            'command' => 'cmd /c mkdir C:\ProgramData\PuppetLabs\facter\etc',
+            'creates' => 'C:\ProgramData\PuppetLabs\facter\etc',
+            'path'    => 'C:\Program Files\Puppet Labs\Puppet\puppet\bin;C:\Program Files\Puppet Labs\Puppet\bin',
+          })
+        }
+
+        it {
+          should contain_file('C:\ProgramData\PuppetLabs\facter\etc').with({
+            'ensure'  => 'directory',
+            'owner'   => 'NT AUTHORITY\SYSTEM',
+            'group'   => 'NT AUTHORITY\SYSTEM',
+            'mode'    => nil,
+            'require' => 'Exec[mkdir_p-C:\ProgramData\PuppetLabs\facter\etc]',
+          })
+        }
       end
 
       describe 'with purge_facts_d' do
